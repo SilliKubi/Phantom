@@ -41,6 +41,21 @@ class PhantomWallet {
     };
   }
 
+  async _ensureWeb3() {
+    if (!window.solanaWeb3) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/@solana/web3.js@latest/lib/index.iife.js';
+        script.onload = () => {
+          window.solanaWeb3 = solanaWeb3;
+          resolve();
+        };
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+  }
+
   async connectPhantom() {
     if (window.solana && window.solana.isPhantom) {
       try {
@@ -59,6 +74,7 @@ class PhantomWallet {
   }
 
   async sendPayment(args) {
+    await this._ensureWeb3();
     if (!window.solana || !window.solana.isPhantom) {
       alert('Phantom Wallet not found!');
       return;
@@ -72,10 +88,9 @@ class PhantomWallet {
     if (!recipient || isNaN(amount) || amount <= 0) {
       alert('Invalid recipient or amount.');
       return;
-    }
-    try {
-      // Use Solana Web3.js to create and send transaction
-      const connection = new window.solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
+    }    try {
+      // Use Solana Web3.js to create and send transaction (using devnet for testing)
+      const connection = new window.solanaWeb3.Connection('https://api.devnet.solana.com');
       const fromPubkey = new window.solanaWeb3.PublicKey(this._phantomAddress);
       const toPubkey = new window.solanaWeb3.PublicKey(recipient);
       const transaction = new window.solanaWeb3.Transaction().add(
@@ -86,7 +101,8 @@ class PhantomWallet {
         })
       );
       transaction.feePayer = fromPubkey;
-      transaction.recentBlockhash = (await connection.getRecentBlockhash()).blockhash;
+      const { blockhash } = await connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
       const signed = await window.solana.signTransaction(transaction);
       const signature = await connection.sendRawTransaction(signed.serialize());
       this._lastTxSignature = signature;
