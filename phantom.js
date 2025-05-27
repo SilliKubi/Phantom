@@ -1,18 +1,12 @@
-class TEMPLATE {
+class PhantomWallet {
   getInfo() {
     return {
-      id: 'Template',
-      name: 'Template Extension',
+      id: 'PhantomWallet',
+      name: 'Phantom Wallet Extension',
       color1: '#91b8ff',
       color2: '#576c91',
       color3: '#2e394d',
-
       blocks: [
-        {
-          opcode: 'tempcom',
-          blockType: Scratch.BlockType.COMMAND,
-          text: 'Template Command'
-        },
         {
           opcode: 'connectPhantom',
           blockType: Scratch.BlockType.COMMAND,
@@ -23,12 +17,28 @@ class TEMPLATE {
           blockType: Scratch.BlockType.REPORTER,
           text: 'Phantom Wallet Address'
         },
+        {
+          opcode: 'sendPayment',
+          blockType: Scratch.BlockType.COMMAND,
+          text: 'Send [AMOUNT] SOL to [RECIPIENT]',
+          arguments: {
+            AMOUNT: {
+              type: 'number',
+              defaultValue: 0.01
+            },
+            RECIPIENT: {
+              type: 'string',
+              defaultValue: 'RecipientAddressHere'
+            }
+          }
+        },
+        {
+          opcode: 'getLastTxSignature',
+          blockType: Scratch.BlockType.REPORTER,
+          text: 'Last Transaction Signature'
+        },
       ]
     };
-  }
-
-  tempcom() {
-    return '';
   }
 
   async connectPhantom() {
@@ -47,6 +57,48 @@ class TEMPLATE {
   getPhantomAddress() {
     return this._phantomAddress || '';
   }
+
+  async sendPayment(args) {
+    if (!window.solana || !window.solana.isPhantom) {
+      alert('Phantom Wallet not found!');
+      return;
+    }
+    if (!this._phantomAddress) {
+      alert('Please connect to Phantom first!');
+      return;
+    }
+    const recipient = args.RECIPIENT;
+    const amount = Number(args.AMOUNT);
+    if (!recipient || isNaN(amount) || amount <= 0) {
+      alert('Invalid recipient or amount.');
+      return;
+    }
+    try {
+      // Use Solana Web3.js to create and send transaction
+      const connection = new window.solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
+      const fromPubkey = new window.solanaWeb3.PublicKey(this._phantomAddress);
+      const toPubkey = new window.solanaWeb3.PublicKey(recipient);
+      const transaction = new window.solanaWeb3.Transaction().add(
+        window.solanaWeb3.SystemProgram.transfer({
+          fromPubkey,
+          toPubkey,
+          lamports: amount * window.solanaWeb3.LAMPORTS_PER_SOL
+        })
+      );
+      transaction.feePayer = fromPubkey;
+      transaction.recentBlockhash = (await connection.getRecentBlockhash()).blockhash;
+      const signed = await window.solana.signTransaction(transaction);
+      const signature = await connection.sendRawTransaction(signed.serialize());
+      this._lastTxSignature = signature;
+      alert('Transaction sent! Signature: ' + signature);
+    } catch (e) {
+      alert('Payment failed: ' + e.message);
+    }
+  }
+
+  getLastTxSignature() {
+    return this._lastTxSignature || '';
+  }
 }
 
-Scratch.extensions.register(new TEMPLATE());
+Scratch.extensions.register(new PhantomWallet());
